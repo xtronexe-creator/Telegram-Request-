@@ -8,6 +8,7 @@ from telegram.ext import (
     ContextTypes,
     ChatJoinRequestHandler,
 )
+from main import keep_alive
 
 # ----------------- CONFIG -----------------
 BOT_TOKEN = os.getenv("BOT_TOKEN")  # Railway / ENV থেকে নেবে
@@ -245,4 +246,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
