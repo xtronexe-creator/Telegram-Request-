@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime, time, timedelta
 import pytz
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -9,11 +10,14 @@ from telegram.ext import (
 )
 
 # ----------------- CONFIG -----------------
-BOT_TOKEN = "8256240814:AAHggvBYHF-uTvnv-JB23tkV9nqwHLHbM3E"
-CHANNEL_ID = -1001524647918  # private channel ID
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # Railway / ENV থেকে নেবে
+CHANNEL_ID = -1001524647918          # private channel ID
 TIMEZONE = "Asia/Dhaka"
-USERS_FILE = "users.json"
+USERS_FILE = "user.json"             # FIXED (আপনার ফাইল অনুযায়ী)
 # ------------------------------------------
+
+if not BOT_TOKEN:
+    raise RuntimeError("BOT_TOKEN not found in environment variables")
 
 # Welcome DM message
 WELCOME_TEXT = """👋 Hi You Know!
@@ -45,11 +49,10 @@ WEEKLY_DM_MSG = """🥳 Hey Dear,
 def save_user(user_id: int):
     try:
         with open(USERS_FILE, "r") as f:
-            try:
-                data = json.load(f)
-            except json.JSONDecodeError:
-                data = []  # empty file বা invalid JSON থাকলে নতুন list
-    except FileNotFoundError:
+            data = json.load(f)
+            if not isinstance(data, list):
+                data = []
+    except (FileNotFoundError, json.JSONDecodeError):
         data = []
 
     if user_id not in data:
@@ -62,6 +65,100 @@ async def join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.chat_join_request.from_user
     chat_id = update.chat_join_request.chat.id
 
+    # Auto approve
+    try:
+        await context.bot.approve_chat_join_request(chat_id, user.id)
+    except Exception as e:
+        print(f"Approve failed {user.id}: {e}")
+
+    save_user(user.id)
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📞 Contact Admin", url="https://t.me/cb1traderbd?text=I%20want%20to%20Join%20CB%20VIP")]
+    ])
+
+    try:
+        await context.bot.send_message(
+            chat_id=user.id,
+            text=WELCOME_TEXT,
+            reply_markup=keyboard
+        )
+    except Exception as e:
+        print(f"DM failed {user.id}: {e}")
+
+# Weekly channel post
+async def weekly_channel_post(context: ContextTypes.DEFAULT_TYPE):
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📞 Contact Admin", url="https://t.me/cb1traderbd?text=I%20want%20to%20Join%20CB%20VIP")]
+    ])
+    try:
+        await context.bot.send_message(
+            chat_id=CHANNEL_ID,
+            text=WEEKLY_CHANNEL_MSG,
+            reply_markup=keyboard
+        )
+    except Exception as e:
+        print(f"Channel post failed: {e}")
+
+# Weekly DM broadcast
+async def weekly_dm(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        with open(USERS_FILE, "r") as f:
+            users = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        users = []
+
+    for user_id in users:
+        try:
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("Join Now", url="https://t.me/cb1traderbd?text=I%20want%20to%20Join%20CB%20VIP")]
+            ])
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=WEEKLY_DM_MSG,
+                reply_markup=keyboard
+            )
+        except Exception:
+            continue
+
+# ----------------- Scheduler -----------------
+def schedule_weekly_jobs(app):
+    tz = pytz.timezone(TIMEZONE)
+    now = datetime.now(tz)
+
+    days_ahead = 4 - now.weekday()  # Friday = 4
+    if days_ahead < 0:
+        days_ahead += 7
+
+    next_friday = datetime.combine(
+        now.date() + timedelta(days=days_ahead),
+        time(hour=21, minute=0),
+        tzinfo=tz
+    )
+
+    delta = (next_friday - now).total_seconds()
+
+    app.job_queue.run_repeating(
+        weekly_channel_post,
+        interval=7 * 24 * 60 * 60,
+        first=delta
+    )
+    app.job_queue.run_repeating(
+        weekly_dm,
+        interval=7 * 24 * 60 * 60,
+        first=delta
+    )
+
+# ----------------- Main -----------------
+def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(ChatJoinRequestHandler(join_request))
+    schedule_weekly_jobs(app)
+    print("🤖 Bot Running...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
     # ----------------- Fake / bot filter -----------------
     # Example: account must be older than 1 day (UTC)
     # Telegram API does not give join date, so advanced check skipped
@@ -148,3 +245,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
