@@ -1,5 +1,0 @@
-python-telegram-bot==20.3
-apscheduler
-httpx~=0.25.2
-pytz
-flask
