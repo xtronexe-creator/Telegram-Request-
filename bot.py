@@ -11,8 +11,11 @@ from telegram.ext import (
 )
 
 # ----------------- CONFIG -----------------
-BOT_TOKEN = "8256240814:AAHggvBYHF-uTvnv-JB23tkV9nqwHLHbM3E"
-CHANNEL_ID = -1001524647918  # private channel ID
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN environment variable not set")
+
+CHANNEL_ID = -1001524647918
 TIMEZONE = "Asia/Dhaka"
 USERS_FILE = "users.json"
 OWNER_ID = 5894250379
